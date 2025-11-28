@@ -7,18 +7,39 @@ from membersim.core.member import Member
 from membersim.core.plan import SAMPLE_PLANS, Plan
 from membersim.core.provider import Provider
 from membersim.core.subscriber import Subscriber
+from membersim.scenarios import (
+    BUILTIN_SCENARIOS,
+    MemberTimeline,
+    ScenarioDefinition,
+    ScenarioEngine,
+    ScenarioLibrary,
+    TimelineEvent,
+    create_default_engine,
+    register_builtin_scenarios,
+)
 
 __version__ = "0.1.0"
 
 __all__ = [
+    # Core models
     "Member",
     "Subscriber",
     "Plan",
     "SAMPLE_PLANS",
     "Provider",
     "Accumulator",
+    # Claims
     "Claim",
     "ClaimLine",
     "Payment",
     "LinePayment",
+    # Scenarios
+    "ScenarioDefinition",
+    "ScenarioLibrary",
+    "ScenarioEngine",
+    "TimelineEvent",
+    "MemberTimeline",
+    "create_default_engine",
+    "register_builtin_scenarios",
+    "BUILTIN_SCENARIOS",
 ]
