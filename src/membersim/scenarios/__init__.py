@@ -4,6 +4,8 @@ This module provides a pathway-based event generation system for creating
 realistic member healthcare journeys.
 """
 
+from healthsim.temporal import EventStatus
+
 from membersim.scenarios.definition import (
     ScenarioDefinition,
     ScenarioLibrary,
@@ -34,6 +36,7 @@ from membersim.scenarios.timeline import MemberTimeline, TimelineEvent
 __all__ = [
     # Event types and building blocks
     "EventType",
+    "EventStatus",
     "EventCategory",
     "DelayUnit",
     "EventDelay",

@@ -2,6 +2,8 @@
 
 from datetime import date, timedelta
 
+from healthsim.temporal import EventStatus
+
 from membersim import Member
 from membersim.scenarios import (
     BUILTIN_SCENARIOS,
@@ -201,7 +203,7 @@ class TestTimelineEvent:
             event_name="New Enrollment",
         )
         assert event.timeline_event_id == "tl_001"
-        assert event.status == "scheduled"
+        assert event.status == EventStatus.PENDING
         assert event.scheduled_date == date(2024, 1, 15)
 
 
@@ -247,7 +249,7 @@ class TestMemberTimeline:
                     scheduled_date=date(2024, 1, 15),
                     event_type=EventType.NEW_ENROLLMENT,
                     event_name="New Enrollment",
-                    status="executed",
+                    status=EventStatus.EXECUTED,
                 ),
                 TimelineEvent(
                     timeline_event_id="tl_002",
@@ -256,7 +258,7 @@ class TestMemberTimeline:
                     scheduled_date=date(2024, 2, 15),
                     event_type=EventType.CLAIM_PROFESSIONAL,
                     event_name="Office Visit",
-                    status="scheduled",
+                    status=EventStatus.PENDING,
                 ),
             ],
         )
@@ -367,7 +369,7 @@ class TestScenarioEngine:
         executed_event = next(
             e for e in timeline.events if e.timeline_event_id == first_event.timeline_event_id
         )
-        assert executed_event.status == "executed"
+        assert executed_event.status == EventStatus.EXECUTED
 
 
 class TestBuiltinScenarios:

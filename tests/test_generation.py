@@ -1,16 +1,25 @@
-"""Tests for generation framework."""
+"""Tests for generation framework.
+
+Tests the healthsim-core generation infrastructure re-exported by membersim,
+and the MemberSim-specific cohort generation.
+"""
+
+import random
 
 import pytest
-
-from membersim.generation import (
+from healthsim.generation import (
     AgeDistribution,
-    CohortConstraints,
-    CohortGenerator,
-    CohortProgress,
     NormalDistribution,
     SeedManager,
     UniformDistribution,
     WeightedChoice,
+)
+
+from membersim.generation import (
+    CohortConstraints,
+    CohortProgress,
+    MemberCohortConstraints,
+    MemberCohortGenerator,
 )
 
 # ============================================================================
@@ -22,50 +31,37 @@ class TestWeightedChoice:
     """Tests for WeightedChoice."""
 
     def test_deterministic_with_seed(self) -> None:
-        """Same seed should produce same sequence."""
-        choice1 = WeightedChoice([("A", 0.5), ("B", 0.5)], seed=42)
-        choice2 = WeightedChoice([("A", 0.5), ("B", 0.5)], seed=42)
+        """Same rng seed should produce same sequence."""
+        rng1 = random.Random(42)
+        rng2 = random.Random(42)
 
-        results1 = choice1.select_n(100)
-        results2 = choice2.select_n(100)
+        choice = WeightedChoice(options=[("A", 0.5), ("B", 0.5)])
+
+        results1 = [choice.select(rng=rng1) for _ in range(100)]
+        results2 = [choice.select(rng=rng2) for _ in range(100)]
 
         assert results1 == results2
 
     def test_respects_weights(self) -> None:
         """Heavily weighted option should be selected more often."""
-        choice = WeightedChoice([("A", 0.99), ("B", 0.01)], seed=42)
-        results = choice.select_n(1000)
+        rng = random.Random(42)
+        choice = WeightedChoice(options=[("A", 0.99), ("B", 0.01)])
+        results = [choice.select(rng=rng) for _ in range(1000)]
 
         a_count = results.count("A")
         assert a_count > 900  # Should be ~99%
 
     def test_empty_choices_raises(self) -> None:
         """Empty choices should raise ValueError."""
-        with pytest.raises(ValueError, match="choices cannot be empty"):
-            WeightedChoice([])
-
-    def test_negative_weight_raises(self) -> None:
-        """Negative weights should raise ValueError."""
-        with pytest.raises(ValueError, match="weights cannot be negative"):
-            WeightedChoice([("A", -0.5), ("B", 0.5)])
-
-    def test_zero_total_weight_raises(self) -> None:
-        """Zero total weight should raise ValueError."""
-        with pytest.raises(ValueError, match="total weight cannot be zero"):
-            WeightedChoice([("A", 0), ("B", 0)])
+        choice = WeightedChoice(options=[])
+        with pytest.raises(ValueError):
+            choice.select()
 
     def test_select_returns_value(self) -> None:
         """Select should return one of the values."""
-        choice = WeightedChoice([("X", 0.5), ("Y", 0.5)], seed=42)
+        choice = WeightedChoice(options=[("X", 0.5), ("Y", 0.5)])
         result = choice.select()
         assert result in ["X", "Y"]
-
-    def test_select_n_returns_list(self) -> None:
-        """Select_n should return list of correct length."""
-        choice = WeightedChoice([("A", 1.0)], seed=42)
-        results = choice.select_n(5)
-        assert len(results) == 5
-        assert all(r == "A" for r in results)
 
 
 # ============================================================================
@@ -78,26 +74,29 @@ class TestUniformDistribution:
 
     def test_sample_within_bounds(self) -> None:
         """Samples should be within min/max bounds."""
-        dist = UniformDistribution(min_val=10.0, max_val=20.0, seed=42)
+        rng = random.Random(42)
+        dist = UniformDistribution(min_val=10.0, max_val=20.0)
         for _ in range(100):
-            value = dist.sample()
+            value = dist.sample(rng=rng)
             assert 10.0 <= value <= 20.0
 
     def test_sample_int_within_bounds(self) -> None:
         """Integer samples should be within bounds."""
-        dist = UniformDistribution(min_val=1.0, max_val=10.0, seed=42)
+        rng = random.Random(42)
+        dist = UniformDistribution(min_val=1.0, max_val=10.0)
         for _ in range(100):
-            value = dist.sample_int()
+            value = dist.sample_int(rng=rng)
             assert 1 <= value <= 10
             assert isinstance(value, int)
 
     def test_deterministic_with_seed(self) -> None:
         """Same seed should produce same sequence."""
-        dist1 = UniformDistribution(0.0, 100.0, seed=42)
-        dist2 = UniformDistribution(0.0, 100.0, seed=42)
+        rng1 = random.Random(42)
+        rng2 = random.Random(42)
+        dist = UniformDistribution(min_val=0.0, max_val=100.0)
 
-        values1 = [dist1.sample() for _ in range(10)]
-        values2 = [dist2.sample() for _ in range(10)]
+        values1 = [dist.sample(rng=rng1) for _ in range(10)]
+        values2 = [dist.sample(rng=rng2) for _ in range(10)]
 
         assert values1 == values2
 
@@ -112,25 +111,28 @@ class TestNormalDistribution:
 
     def test_sample_respects_bounds(self) -> None:
         """Bounded samples should respect min/max."""
-        dist = NormalDistribution(mean=50.0, std_dev=10.0, min_val=40.0, max_val=60.0, seed=42)
+        rng = random.Random(42)
+        dist = NormalDistribution(mean=50.0, std_dev=10.0)
         for _ in range(100):
-            value = dist.sample()
+            value = dist.sample_bounded(min_val=40.0, max_val=60.0, rng=rng)
             assert 40.0 <= value <= 60.0
 
     def test_unbounded_samples(self) -> None:
         """Unbounded distribution should work."""
-        dist = NormalDistribution(mean=0.0, std_dev=1.0, seed=42)
-        values = [dist.sample() for _ in range(100)]
+        rng = random.Random(42)
+        dist = NormalDistribution(mean=0.0, std_dev=1.0)
+        values = [dist.sample(rng=rng) for _ in range(100)]
         # Should have some variation
         assert max(values) != min(values)
 
     def test_deterministic_with_seed(self) -> None:
         """Same seed should produce same sequence."""
-        dist1 = NormalDistribution(50.0, 10.0, seed=42)
-        dist2 = NormalDistribution(50.0, 10.0, seed=42)
+        rng1 = random.Random(42)
+        rng2 = random.Random(42)
+        dist = NormalDistribution(mean=50.0, std_dev=10.0)
 
-        values1 = [dist1.sample() for _ in range(10)]
-        values2 = [dist2.sample() for _ in range(10)]
+        values1 = [dist.sample(rng=rng1) for _ in range(10)]
+        values2 = [dist.sample(rng=rng2) for _ in range(10)]
 
         assert values1 == values2
 
@@ -143,29 +145,33 @@ class TestNormalDistribution:
 class TestAgeDistribution:
     """Tests for AgeDistribution."""
 
-    def test_sample_within_default_bounds(self) -> None:
-        """Ages should be within 0-100 by default."""
-        dist = AgeDistribution(seed=42)
+    def test_sample_within_bounds(self) -> None:
+        """Ages should be within band bounds."""
+        dist = AgeDistribution()  # Default adult distribution
+        dist.seed(42)
         for _ in range(100):
             age = dist.sample()
-            assert 0 <= age <= 100
-
-    def test_sample_respects_custom_bounds(self) -> None:
-        """Custom age bounds should be respected."""
-        dist = AgeDistribution(min_age=18, max_age=65, seed=42)
-        for _ in range(100):
-            age = dist.sample()
-            assert 18 <= age <= 65
+            assert 18 <= age <= 90  # Default bands range
 
     def test_deterministic_with_seed(self) -> None:
         """Same seed should produce same ages."""
-        dist1 = AgeDistribution(seed=42)
-        dist2 = AgeDistribution(seed=42)
+        dist1 = AgeDistribution()
+        dist1.seed(42)
+        dist2 = AgeDistribution()
+        dist2.seed(42)
 
         ages1 = [dist1.sample() for _ in range(10)]
         ages2 = [dist2.sample() for _ in range(10)]
 
         assert ages1 == ages2
+
+    def test_pediatric_distribution(self) -> None:
+        """Pediatric distribution should produce ages 0-17."""
+        dist = AgeDistribution.pediatric()
+        dist.seed(42)
+        for _ in range(100):
+            age = dist.sample()
+            assert 0 <= age <= 17
 
 
 # ============================================================================
@@ -176,50 +182,31 @@ class TestAgeDistribution:
 class TestSeedManager:
     """Tests for SeedManager."""
 
-    def test_deterministic_seeds(self) -> None:
-        """Same master seed should produce same child seeds."""
-        mgr1 = SeedManager(master_seed=42)
-        mgr2 = SeedManager(master_seed=42)
+    def test_deterministic_random(self) -> None:
+        """Same seed should produce same random values."""
+        mgr1 = SeedManager(seed=42)
+        mgr2 = SeedManager(seed=42)
 
-        assert mgr1.get_seed("test") == mgr2.get_seed("test")
-        assert mgr1.get_seed("member_0") == mgr2.get_seed("member_0")
+        assert mgr1.get_random_int(1, 100) == mgr2.get_random_int(1, 100)
 
-    def test_different_keys_different_seeds(self) -> None:
-        """Different keys should produce different seeds."""
-        mgr = SeedManager(master_seed=42)
+    def test_get_child_seed(self) -> None:
+        """Child seeds should be deterministic."""
+        mgr1 = SeedManager(seed=42)
+        mgr2 = SeedManager(seed=42)
 
-        seeds = [mgr.get_seed(f"key_{i}") for i in range(100)]
-        assert len(set(seeds)) == 100  # All unique
+        child1 = mgr1.get_child_seed()
+        child2 = mgr2.get_child_seed()
 
-    def test_child_manager(self) -> None:
-        """Child managers should be deterministic."""
-        mgr1 = SeedManager(master_seed=42)
-        mgr2 = SeedManager(master_seed=42)
+        assert child1 == child2
 
-        child1 = mgr1.child_manager("claims")
-        child2 = mgr2.child_manager("claims")
-
-        assert child1.get_seed("claim_0") == child2.get_seed("claim_0")
-
-    def test_get_seeds_iterator(self) -> None:
-        """get_seeds should return deterministic sequence."""
-        mgr1 = SeedManager(master_seed=42)
-        mgr2 = SeedManager(master_seed=42)
-
-        seeds1 = list(mgr1.get_seeds("member", 10))
-        seeds2 = list(mgr2.get_seeds("member", 10))
-
-        assert seeds1 == seeds2
-        assert len(seeds1) == 10
-
-    def test_reset_clears_cache(self) -> None:
-        """Reset should clear the seed cache."""
-        mgr = SeedManager(master_seed=42)
-        _ = mgr.get_seed("test")
-        assert len(mgr._cache) == 1
-
+    def test_reset_restores_state(self) -> None:
+        """Reset should restore to initial state."""
+        mgr = SeedManager(seed=42)
+        val1 = mgr.get_random_int(1, 1000)
         mgr.reset()
-        assert len(mgr._cache) == 0
+        val2 = mgr.get_random_int(1, 1000)
+
+        assert val1 == val2
 
 
 # ============================================================================
@@ -283,88 +270,47 @@ class TestCohortProgress:
 
 
 # ============================================================================
-# CohortGenerator Tests
+# MemberCohortGenerator Tests
 # ============================================================================
 
 
-class TestCohortGenerator:
-    """Tests for CohortGenerator."""
+class TestMemberCohortGenerator:
+    """Tests for MemberCohortGenerator."""
 
     def test_generates_correct_count(self) -> None:
-        """Should generate requested number of entities."""
+        """Should generate requested number of members."""
+        generator = MemberCohortGenerator(seed=42)
+        constraints = MemberCohortConstraints(count=10)
 
-        def simple_factory(**kwargs):
-            return {"seed": kwargs.get("seed")}
-
-        generator = CohortGenerator(
-            entity_factory=simple_factory,
-            seed=42,
-        )
-
-        entities = list(generator.generate(count=100))
-        assert len(entities) == 100
+        members = generator.generate(constraints)
+        assert len(members) == 10
 
     def test_reproducible_generation(self) -> None:
         """Same seed should produce same cohort."""
+        gen1 = MemberCohortGenerator(seed=42)
+        gen2 = MemberCohortGenerator(seed=42)
 
-        def simple_factory(**kwargs):
-            return kwargs
+        constraints = MemberCohortConstraints(count=10)
 
-        gen1 = CohortGenerator(entity_factory=simple_factory, seed=42)
-        gen2 = CohortGenerator(entity_factory=simple_factory, seed=42)
+        cohort1 = gen1.generate(constraints)
+        cohort2 = gen2.generate(constraints)
 
-        cohort1 = list(gen1.generate(count=50))
-        cohort2 = list(gen2.generate(count=50))
-
-        assert cohort1 == cohort2
-
-    def test_constraint_validation(self) -> None:
-        """Invalid constraints should raise ValueError."""
-        with pytest.raises(ValueError, match="Invalid constraints"):
-            CohortGenerator(
-                entity_factory=lambda **k: k,
-                constraints=CohortConstraints(
-                    gender_distribution={"M": 0.3, "F": 0.3}  # Sums to 0.6
-                ),
-            )
-
-    def test_passes_demographic_attributes(self) -> None:
-        """Factory should receive demographic attributes."""
-        received_kwargs = []
-
-        def capture_factory(**kwargs):
-            received_kwargs.append(kwargs)
-            return kwargs
-
-        generator = CohortGenerator(
-            entity_factory=capture_factory,
-            seed=42,
-        )
-
-        list(generator.generate(count=10))
-
-        # Check all entities received expected kwargs
-        for kwargs in received_kwargs:
-            assert "seed" in kwargs
-            assert "gender" in kwargs
-            assert "plan_type" in kwargs
-            assert "min_age" in kwargs
-            assert "max_age" in kwargs
+        # Compare member IDs to check reproducibility
+        ids1 = [m.member_id for m in cohort1]
+        ids2 = [m.member_id for m in cohort2]
+        assert ids1 == ids2
 
     def test_progress_callback(self) -> None:
         """Progress callback should be called."""
-        progress_reports = []
+        progress_reports: list[int] = []
 
-        def track_progress(progress: CohortProgress):
+        def track_progress(progress: CohortProgress) -> None:
             progress_reports.append(progress.completed)
 
-        generator = CohortGenerator(
-            entity_factory=lambda **k: k,
-            seed=42,
-            progress_callback=track_progress,
-        )
+        generator = MemberCohortGenerator(seed=42)
+        constraints = MemberCohortConstraints(count=50)
 
-        list(generator.generate(count=250))
+        generator.generate(constraints, progress_callback=track_progress)
 
-        # Should have progress reports at 100, 200, and final
-        assert len(progress_reports) >= 2
+        # Should have progress reports for each member
+        assert len(progress_reports) == 50

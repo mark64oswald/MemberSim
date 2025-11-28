@@ -1,27 +1,33 @@
-"""Cohort generation with demographic constraints."""
+"""Member cohort generation using healthsim-core infrastructure.
+
+Extends core CohortGenerator for health plan member-specific generation.
+"""
 
 from __future__ import annotations
 
-import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Generic, Iterator, TypeVar
+from typing import TYPE_CHECKING, Any
 
-from membersim.generation.distributions import WeightedChoice
-from membersim.generation.seed_manager import SeedManager
+from healthsim.generation import CohortConstraints as BaseCohortConstraints
+from healthsim.generation import CohortGenerator as BaseCohortGenerator
+from healthsim.generation import CohortProgress, WeightedChoice
 
-logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
+if TYPE_CHECKING:
+    from membersim.core.member import Member
 
 
 @dataclass
-class CohortConstraints:
-    """Demographic constraints for cohort generation.
+class MemberCohortConstraints(BaseCohortConstraints):
+    """Constraints for member cohort generation.
 
-    All percentages should sum to 1.0 within their category.
+    Extends base constraints with health plan specific options.
     """
 
-    gender_distribution: dict[str, float] = field(default_factory=lambda: {"M": 0.49, "F": 0.51})
+    count: int = 100  # Must re-declare to satisfy dataclass inheritance
+    gender_distribution: dict[str, float] = field(
+        default_factory=lambda: {"M": 0.49, "F": 0.51}
+    )
     age_distribution: dict[str, float] = field(
         default_factory=lambda: {
             "0-17": 0.10,
@@ -53,142 +59,132 @@ class CohortConstraints:
                 errors.append(f"{name} distribution sums to {total}, should be 1.0")
         return errors
 
-
-@dataclass
-class CohortProgress:
-    """Track progress of cohort generation."""
-
-    total: int
-    completed: int = 0
-    failed: int = 0
-
-    @property
-    def percent_complete(self) -> float:
-        return (self.completed / self.total * 100) if self.total > 0 else 0
-
-    @property
-    def is_complete(self) -> bool:
-        return self.completed + self.failed >= self.total
+    def to_dict(self) -> dict[str, Any]:
+        """Convert constraints to dictionary."""
+        base = super().to_dict()
+        base.update({
+            "gender_distribution": self.gender_distribution,
+            "age_distribution": self.age_distribution,
+            "plan_distribution": self.plan_distribution,
+            "state_distribution": self.state_distribution,
+        })
+        return base
 
 
-class CohortGenerator(Generic[T]):
-    """Generate cohorts of entities with demographic constraints.
+class MemberCohortGenerator(BaseCohortGenerator["Member"]):
+    """Generate cohorts of health plan members with demographic constraints.
 
     Example:
-        from membersim.core.member import Member
-
-        constraints = CohortConstraints(
+        constraints = MemberCohortConstraints(
+            count=1000,
             gender_distribution={"M": 0.45, "F": 0.55},
             plan_distribution={"PPO": 0.6, "HMO": 0.4},
         )
 
-        generator = CohortGenerator(
-            entity_factory=create_member,
-            constraints=constraints,
-            seed=42,
-        )
-
-        members = list(generator.generate(count=1000))
+        generator = MemberCohortGenerator(seed=42)
+        members = generator.generate(constraints)
     """
 
-    def __init__(
-        self,
-        entity_factory: Callable[..., T],
-        constraints: CohortConstraints | None = None,
-        seed: int | None = None,
-        progress_callback: Callable[[CohortProgress], None] | None = None,
-    ):
-        """Initialize cohort generator.
+    def __init__(self, seed: int | None = None):
+        """Initialize member cohort generator.
 
         Args:
-            entity_factory: Function that creates entity given kwargs
-            constraints: Demographic constraints to satisfy
             seed: Random seed for reproducibility
-            progress_callback: Optional callback for progress updates
         """
-        self.entity_factory = entity_factory
-        self.constraints = constraints or CohortConstraints()
-        self.seed_manager = SeedManager(seed or 42)
-        self.progress_callback = progress_callback
+        super().__init__(seed=seed)
+        # Late import to avoid circular dependency
+        from membersim.core.member import MemberGenerator
 
-        # Validate constraints
-        errors = self.constraints.validate()
-        if errors:
-            raise ValueError(f"Invalid constraints: {errors}")
+        self._member_generator = MemberGenerator(seed=seed)
+        self._gender_choice: WeightedChoice[str] | None = None
+        self._plan_choice: WeightedChoice[str] | None = None
+        self._age_choice: WeightedChoice[str] | None = None
 
-        # Create weighted choices for each distribution
+    def _setup_distributions(self, constraints: MemberCohortConstraints) -> None:
+        """Setup weighted choice distributions from constraints."""
         self._gender_choice = WeightedChoice(
-            list(self.constraints.gender_distribution.items()),
-            seed=self.seed_manager.get_seed("gender"),
+            options=list(constraints.gender_distribution.items()),
         )
         self._plan_choice = WeightedChoice(
-            list(self.constraints.plan_distribution.items()),
-            seed=self.seed_manager.get_seed("plan"),
+            options=list(constraints.plan_distribution.items()),
+        )
+        self._age_choice = WeightedChoice(
+            options=list(constraints.age_distribution.items()),
         )
 
     def _select_age_band(self, age_band: str) -> tuple[int, int]:
         """Convert age band string to (min, max) tuple."""
-        if age_band == "0-17":
-            return (0, 17)
-        elif age_band == "18-34":
-            return (18, 34)
-        elif age_band == "35-54":
-            return (35, 54)
-        elif age_band == "55-64":
-            return (55, 64)
-        elif age_band == "65+":
-            return (65, 90)
-        else:
+        age_bands = {
+            "0-17": (0, 17),
+            "18-34": (18, 34),
+            "35-54": (35, 54),
+            "55-64": (55, 64),
+            "65+": (65, 90),
+        }
+        if age_band not in age_bands:
             raise ValueError(f"Unknown age band: {age_band}")
+        return age_bands[age_band]
 
-    def generate(self, count: int) -> Iterator[T]:
-        """Generate cohort of entities satisfying constraints.
+    def generate_one(
+        self,
+        index: int,
+        constraints: BaseCohortConstraints,
+    ) -> Member:
+        """Generate a single member.
 
         Args:
-            count: Number of entities to generate
+            index: Index of this member in the cohort
+            constraints: Generation constraints
 
-        Yields:
-            Generated entities.
+        Returns:
+            Generated Member instance
         """
-        progress = CohortProgress(total=count)
+        if not isinstance(constraints, MemberCohortConstraints):
+            constraints = MemberCohortConstraints(count=constraints.count)
 
-        # Pre-calculate target counts for each constraint category
-        age_choice = WeightedChoice(
-            list(self.constraints.age_distribution.items()),
-            seed=self.seed_manager.get_seed("age"),
+        # Setup distributions on first call
+        if self._gender_choice is None:
+            self._setup_distributions(constraints)
+
+        # Select attributes from distributions using seed_manager's rng
+        gender = self._gender_choice.select(rng=self.seed_manager.rng)  # type: ignore
+        plan_type = self._plan_choice.select(rng=self.seed_manager.rng)  # type: ignore
+        age_band = self._age_choice.select(rng=self.seed_manager.rng)  # type: ignore
+        min_age, max_age = self._select_age_band(age_band)
+
+        # Get deterministic seed for this member
+        member_seed = self.seed_manager.get_child_seed()
+
+        return self._member_generator.generate_one(
+            seed=member_seed,
+            gender=gender,
+            plan_type=plan_type,
+            min_age=min_age,
+            max_age=max_age,
         )
 
-        for i in range(count):
-            try:
-                # Select demographic attributes
-                gender = self._gender_choice.select()
-                plan_type = self._plan_choice.select()
-                age_band = age_choice.select()
-                min_age, max_age = self._select_age_band(age_band)
+    def generate(
+        self,
+        constraints: BaseCohortConstraints,
+        progress_callback: Callable[[CohortProgress], None] | None = None,
+    ) -> list[Member]:
+        """Generate a cohort of members.
 
-                # Get deterministic seed for this entity
-                entity_seed = self.seed_manager.get_seed(f"entity_{i}")
+        Args:
+            constraints: Generation constraints
+            progress_callback: Optional callback for progress updates
 
-                # Create entity with selected attributes
-                entity = self.entity_factory(
-                    seed=entity_seed,
-                    gender=gender,
-                    plan_type=plan_type,
-                    min_age=min_age,
-                    max_age=max_age,
-                )
+        Returns:
+            List of generated members
+        """
+        # Reset distributions for new cohort
+        self._gender_choice = None
+        self._plan_choice = None
+        self._age_choice = None
 
-                progress.completed += 1
-                yield entity
+        return super().generate(constraints, progress_callback)
 
-            except Exception as e:
-                logger.warning(f"Failed to generate entity {i}: {e}")
-                progress.failed += 1
 
-            # Report progress
-            if self.progress_callback and (i + 1) % 100 == 0:
-                self.progress_callback(progress)
-
-        # Final progress report
-        if self.progress_callback:
-            self.progress_callback(progress)
+# Aliases for backward compatibility
+CohortConstraints = MemberCohortConstraints
+CohortGenerator = MemberCohortGenerator

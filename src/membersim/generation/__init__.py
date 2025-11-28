@@ -1,27 +1,36 @@
 """Generation framework for MemberSim.
 
-Provides infrastructure for reproducible, constraint-based member generation.
+Re-exports healthsim-core generation infrastructure and provides
+member-specific cohort generation.
 """
+
+from healthsim.generation import (
+    AgeDistribution,
+    NormalDistribution,
+    SeedManager,
+    UniformDistribution,
+    WeightedChoice,
+)
 
 from membersim.generation.cohort import (
     CohortConstraints,
     CohortGenerator,
     CohortProgress,
+    MemberCohortConstraints,
+    MemberCohortGenerator,
 )
-from membersim.generation.distributions import (
-    AgeDistribution,
-    NormalDistribution,
-    UniformDistribution,
-    WeightedChoice,
-)
-from membersim.generation.seed_manager import SeedManager
 
 __all__ = [
+    # Re-exported from healthsim-core
     "WeightedChoice",
     "UniformDistribution",
     "NormalDistribution",
     "AgeDistribution",
     "SeedManager",
+    # Member-specific
+    "MemberCohortConstraints",
+    "MemberCohortGenerator",
+    # Aliases for backward compatibility
     "CohortConstraints",
     "CohortProgress",
     "CohortGenerator",

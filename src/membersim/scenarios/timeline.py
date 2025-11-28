@@ -1,16 +1,23 @@
-"""Timeline management for member event sequences."""
+"""Timeline management for member event sequences.
+
+Uses healthsim-core Timeline infrastructure with member-specific extensions.
+"""
 
 import uuid
 from datetime import date
 from typing import Any, Optional
 
+from healthsim.temporal import EventStatus
 from pydantic import BaseModel, Field
 
 from membersim.scenarios.events import EventType
 
 
 class TimelineEvent(BaseModel):
-    """A concrete event instance on a member's timeline."""
+    """A concrete event instance on a member's timeline.
+
+    Uses healthsim.temporal.EventStatus for status tracking.
+    """
 
     timeline_event_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
 
@@ -26,8 +33,8 @@ class TimelineEvent(BaseModel):
     event_type: EventType = Field(...)
     event_name: str = Field(...)
 
-    # Status
-    status: str = Field("scheduled", description="scheduled, executed, skipped, failed")
+    # Status using core EventStatus
+    status: EventStatus = Field(EventStatus.PENDING, description="Event status")
 
     # Generated outputs (filled after execution)
     outputs: dict[str, Any] = Field(default_factory=dict)
@@ -39,7 +46,11 @@ class TimelineEvent(BaseModel):
 
 
 class MemberTimeline(BaseModel):
-    """Complete timeline of events for a member."""
+    """Complete timeline of events for a member.
+
+    Manages sequences of events while maintaining compatibility with
+    healthsim-core Timeline concepts.
+    """
 
     timeline_id: str = Field(default_factory=lambda: f"TL-{uuid.uuid4().hex[:8].upper()}")
     member_id: str = Field(..., description="Associated member")
@@ -66,11 +77,11 @@ class MemberTimeline(BaseModel):
 
     def get_pending_events(self) -> list[TimelineEvent]:
         """Get events that haven't been executed yet."""
-        return [e for e in self.events if e.status == "scheduled"]
+        return [e for e in self.events if e.status == EventStatus.PENDING]
 
     def get_executed_events(self) -> list[TimelineEvent]:
         """Get events that have been executed."""
-        return [e for e in self.events if e.status == "executed"]
+        return [e for e in self.events if e.status == EventStatus.EXECUTED]
 
     def get_events_on_date(self, target_date: date) -> list[TimelineEvent]:
         """Get events scheduled for a specific date."""
@@ -84,6 +95,10 @@ class MemberTimeline(BaseModel):
         """Get events of a specific type."""
         return [e for e in self.events if e.event_type == event_type]
 
+    def get_events_by_status(self, status: EventStatus) -> list[TimelineEvent]:
+        """Get events with a specific status."""
+        return [e for e in self.events if e.status == status]
+
     def get_next_event(self) -> Optional[TimelineEvent]:
         """Get the next scheduled event."""
         pending = self.get_pending_events()
@@ -95,10 +110,28 @@ class MemberTimeline(BaseModel):
         """Mark an event as executed."""
         for event in self.events:
             if event.timeline_event_id == timeline_event_id:
-                event.status = "executed"
+                event.status = EventStatus.EXECUTED
                 event.executed_date = date.today()
                 if outputs:
                     event.outputs = outputs
+                break
+
+        # Check if timeline is complete
+        if not self.get_pending_events():
+            self.is_complete = True
+
+    def mark_failed(self, timeline_event_id: str, error: str = "") -> None:
+        """Mark an event as failed."""
+        for event in self.events:
+            if event.timeline_event_id == timeline_event_id:
+                event.status = EventStatus.FAILED
+                break
+
+    def mark_skipped(self, timeline_event_id: str, reason: str = "") -> None:
+        """Mark an event as skipped."""
+        for event in self.events:
+            if event.timeline_event_id == timeline_event_id:
+                event.status = EventStatus.SKIPPED
                 break
 
         # Check if timeline is complete

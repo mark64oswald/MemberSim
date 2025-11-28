@@ -71,18 +71,11 @@ class MemberGenerator:
         self._rng = random.Random(seed)
         self._counter = 0
 
-        # Distribution choices
-        self._gender = WeightedChoice(
-            [("M", 0.49), ("F", 0.51)],
-            seed=self.seed_manager.get_seed("gender"),
-        )
-        self._plan_type = WeightedChoice(
-            [("HMO", 0.35), ("PPO", 0.40), ("HDHP", 0.25)],
-            seed=self.seed_manager.get_seed("plan"),
-        )
+        # Distribution choices (using healthsim-core v0.2.0 API)
+        self._gender = WeightedChoice(options=[("M", 0.49), ("F", 0.51)])
+        self._plan_type = WeightedChoice(options=[("HMO", 0.35), ("PPO", 0.40), ("HDHP", 0.25)])
         self._relationship = WeightedChoice(
-            [("18", 0.60), ("01", 0.25), ("19", 0.15)],  # Self, Spouse, Child
-            seed=self.seed_manager.get_seed("relationship"),
+            options=[("18", 0.60), ("01", 0.25), ("19", 0.15)]  # Self, Spouse, Child
         )
 
     def _generate_birth_date(self, min_age: int = 0, max_age: int = 90) -> date:
@@ -129,13 +122,15 @@ class MemberGenerator:
         if seed is not None:
             member_rng = random.Random(seed)
         else:
-            member_seed = self.seed_manager.get_seed(f"member_{self._counter}")
+            member_seed = self.seed_manager.get_child_seed()
             member_rng = random.Random(member_seed)
 
-        # Select or use provided attributes
-        selected_gender = gender or self._gender.select()
-        selected_plan = plan_type or self._plan_type.select()
-        relationship = overrides.get("relationship_code") or self._relationship.select()
+        # Select or use provided attributes (using healthsim-core v0.2.0 API)
+        selected_gender = gender or self._gender.select(rng=self._rng)
+        selected_plan = plan_type or self._plan_type.select(rng=self._rng)
+        relationship = (
+            overrides.get("relationship_code") or self._relationship.select(rng=self._rng)
+        )
 
         # Generate name based on gender
         if selected_gender == "M":
