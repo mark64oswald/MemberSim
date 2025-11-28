@@ -4,7 +4,7 @@ This module defines member-specific models that extend or complement
 healthsim-core's base models for health plan/insurance use cases.
 """
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from enum import Enum
 

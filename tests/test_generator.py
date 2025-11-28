@@ -1,6 +1,5 @@
 """Tests for MemberGenerator."""
 
-import pytest
 from healthsim.generation import BaseGenerator
 
 from membersim.core.generator import MemberGenerator
