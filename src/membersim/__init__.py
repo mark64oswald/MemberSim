@@ -3,10 +3,20 @@
 from membersim.claims.claim import Claim, ClaimLine
 from membersim.claims.payment import LinePayment, Payment
 from membersim.core.accumulator import Accumulator
-from membersim.core.member import Member
+from membersim.core.member import Member, MemberGenerator
 from membersim.core.plan import SAMPLE_PLANS, Plan
 from membersim.core.provider import Provider
 from membersim.core.subscriber import Subscriber
+from membersim.generation import (
+    AgeDistribution,
+    CohortConstraints,
+    CohortGenerator,
+    CohortProgress,
+    NormalDistribution,
+    SeedManager,
+    UniformDistribution,
+    WeightedChoice,
+)
 from membersim.scenarios import (
     BUILTIN_SCENARIOS,
     MemberTimeline,
@@ -23,6 +33,7 @@ __version__ = "0.1.0"
 __all__ = [
     # Core models
     "Member",
+    "MemberGenerator",
     "Subscriber",
     "Plan",
     "SAMPLE_PLANS",
@@ -33,6 +44,15 @@ __all__ = [
     "ClaimLine",
     "Payment",
     "LinePayment",
+    # Generation
+    "WeightedChoice",
+    "UniformDistribution",
+    "NormalDistribution",
+    "AgeDistribution",
+    "SeedManager",
+    "CohortConstraints",
+    "CohortProgress",
+    "CohortGenerator",
     # Scenarios
     "ScenarioDefinition",
     "ScenarioLibrary",
