@@ -1,0 +1,1 @@
+"""Fee schedule entities."""
