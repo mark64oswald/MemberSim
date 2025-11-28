@@ -1,1 +1,1 @@
-"""MCP server module."""
+"""MCP server for MemberSim."""

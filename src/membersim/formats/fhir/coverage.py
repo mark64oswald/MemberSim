@@ -1,1 +1,0 @@
-"""FHIR Coverage resource generation."""

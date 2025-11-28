@@ -1,1 +1,0 @@
-"""FHIR format module."""
