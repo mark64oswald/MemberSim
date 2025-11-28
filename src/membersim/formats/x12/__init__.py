@@ -7,6 +7,12 @@ from membersim.formats.x12.edi_270_271 import (
     generate_270,
     generate_271,
 )
+from membersim.formats.x12.edi_278 import (
+    EDI278RequestGenerator,
+    EDI278ResponseGenerator,
+    generate_278_request,
+    generate_278_response,
+)
 from membersim.formats.x12.edi_834 import EDI834Generator, generate_834
 from membersim.formats.x12.edi_835 import EDI835Generator, generate_835
 from membersim.formats.x12.edi_837 import (
@@ -36,4 +42,9 @@ __all__ = [
     "EDI271Generator",
     "generate_270",
     "generate_271",
+    # 278 Prior Authorization
+    "EDI278RequestGenerator",
+    "EDI278ResponseGenerator",
+    "generate_278_request",
+    "generate_278_response",
 ]
