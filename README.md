@@ -4,7 +4,7 @@
 
 MemberSim creates not just member data, but complete **payer scenarios** with realistic event timelines — from enrollment through claims processing, care gap identification, and value-based care attribution.
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
@@ -523,7 +523,7 @@ Contributions welcome! We're especially interested in:
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) file for details.
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
